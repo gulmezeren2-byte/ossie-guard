@@ -1,0 +1,30 @@
+version: 0.2.0.dev0
+name: DriftModel
+description: Metrics whose dialects silently disagree - invisible to schema validation.
+semantic_model:
+  metrics:
+    # SUM on one engine, AVG on another: the "same" metric computes different
+    # numbers per warehouse. -> AGGREGATE_DRIFT (error)
+    - name: revenue
+      expression:
+        dialects:
+          - dialect: ANSI_SQL
+            expression: SUM(amount)
+          - dialect: SNOWFLAKE
+            expression: AVG(amount)
+    # copy-paste left one dialect summing a different column. -> COLUMN_DRIFT (warning)
+    - name: gross_sales
+      expression:
+        dialects:
+          - dialect: ANSI_SQL
+            expression: SUM(ss_ext_sales_price)
+          - dialect: BIGQUERY
+            expression: SUM(ss_sales_price)
+    # a hard-coded tax rate drifted between dialects. -> LITERAL_DRIFT (warning)
+    - name: revenue_with_tax
+      expression:
+        dialects:
+          - dialect: ANSI_SQL
+            expression: SUM(amount * 1.08)
+          - dialect: SNOWFLAKE
+            expression: SUM(amount * 1.18)

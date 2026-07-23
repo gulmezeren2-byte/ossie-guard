@@ -1,0 +1,23 @@
+version: 0.2.0.dev0
+name: UnsafeModel
+description: Metric expressions that are impure (side-effecting) or non-reproducible.
+semantic_model:
+  metrics:
+    # a "metric" that reads a server file. -> UNSAFE_FUNCTION (error)
+    - name: leaky
+      expression:
+        dialects:
+          - dialect: ANSI_SQL
+            expression: MAX(pg_read_file('/etc/passwd'))
+    # non-reproducible: depends on the wall clock. -> NONDETERMINISTIC (warning)
+    - name: todays_revenue
+      expression:
+        dialects:
+          - dialect: ANSI_SQL
+            expression: SUM(CASE WHEN order_date = CURRENT_DATE THEN amount ELSE 0 END)
+    # non-reproducible: random each run. -> NONDETERMINISTIC (warning)
+    - name: coin_flip
+      expression:
+        dialects:
+          - dialect: SNOWFLAKE
+            expression: SUM(CASE WHEN RANDOM() > 0.5 THEN 1 ELSE 0 END)

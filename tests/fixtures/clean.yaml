@@ -1,0 +1,36 @@
+version: 0.2.0.dev0
+name: CleanModel
+description: A model whose metrics agree across dialects and are pure & deterministic.
+semantic_model:
+  datasets:
+    - name: orders
+      fields:
+        - name: amount
+          expression:
+            dialects:
+              - dialect: ANSI_SQL
+                expression: amount
+  metrics:
+    # identical across two dialects -> no drift
+    - name: total_revenue
+      expression:
+        dialects:
+          - dialect: ANSI_SQL
+            expression: SUM(amount)
+          - dialect: SNOWFLAKE
+            expression: SUM(amount)
+    # single dialect -> nothing to compare
+    - name: order_count
+      expression:
+        dialects:
+          - dialect: ANSI_SQL
+            expression: COUNT(DISTINCT order_id)
+    # benign dialect spelling (COALESCE vs NVL): same columns, same aggregate,
+    # same literal -> ossie-guard must NOT flag this.
+    - name: avg_price
+      expression:
+        dialects:
+          - dialect: ANSI_SQL
+            expression: AVG(COALESCE(price, 0))
+          - dialect: SNOWFLAKE
+            expression: AVG(NVL(price, 0))

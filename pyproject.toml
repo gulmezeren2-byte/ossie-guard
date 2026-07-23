@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ossie-guard"
+version = "0.1.0"
+description = "Honesty & safety linter for Apache Ossie semantic models: catches cross-dialect metric drift and impure/non-deterministic expressions the schema validator can't see."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Mehmet Eren Gülmez" }]
+keywords = [
+    "ossie",
+    "open-semantic-interchange",
+    "semantic-layer",
+    "sql",
+    "linter",
+    "sqlglot",
+    "metrics",
+    "data-quality",
+    "dbt",
+    "bi",
+]
+dependencies = [
+    "pyyaml>=6.0",
+    "sqlglot>=25.0",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: SQL",
+    "Topic :: Database",
+    "Topic :: Software Development :: Quality Assurance",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/gulmezeren2-byte/ossie-guard"
+Repository = "https://github.com/gulmezeren2-byte/ossie-guard"
+"Apache Ossie" = "https://github.com/apache/ossie"
+"Sibling project (readonly-sql-guard)" = "https://github.com/gulmezeren2-byte/readonly-sql-guard"
+
+[project.scripts]
+ossie-guard = "ossie_guard.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ossie_guard"]
+
+[tool.hatch.build.targets.sdist]
+include = ["ossie_guard", "tests", "README.md", "LICENSE", "CHANGELOG.md"]
