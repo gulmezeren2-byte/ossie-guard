@@ -42,9 +42,14 @@ ossie-guard 0.1.0 - model.yaml
 
 ## Install
 
+Works today, straight from the repo:
+
 ```console
-pip install ossie-guard
+pip install git+https://github.com/gulmezeren2-byte/ossie-guard
 ```
+
+A PyPI release (`pip install ossie-guard`) is on the way — the publish workflow
+is wired for Trusted Publishing and fires on the first tagged release.
 
 Dependencies are exactly Ossie's own: `pyyaml` and `sqlglot`, nothing else.
 
@@ -63,7 +68,8 @@ Exit code is `0` when clean, `1` when an error is found (or any finding under
 ```yaml
 # .github/workflows/semantic-model.yml
 - run: python validation/validate.py model.yaml      # Ossie: does it parse?
-- run: pip install ossie-guard && ossie-guard model.yaml   # ossie-guard: does it agree, and is it pure?
+- run: pip install git+https://github.com/gulmezeren2-byte/ossie-guard
+- run: ossie-guard model.yaml                         # ossie-guard: does it agree, and is it pure?
 ```
 
 As a library:

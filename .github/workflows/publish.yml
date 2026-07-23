@@ -1,0 +1,60 @@
+# Publishes to PyPI on a GitHub Release, via Trusted Publishing (OIDC) - no
+# stored token. One-time setup: add this repo as a Trusted Publisher on PyPI
+# (project: ossie-guard, owner/repo: gulmezeren2-byte/ossie-guard,
+# workflow: publish.yml, environment: pypi). Then publish a release tagged
+# v0.1.0 and it ships automatically.
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  # A PyPI release is irreversible, so the tests run here too rather than
+  # trusting that CI was green on some earlier commit.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e . pytest
+      - run: python -m pytest -q
+      - name: The release tag must match __version__
+        run: |
+          python - <<'PY'
+          import os, re, pathlib, sys
+          tag = os.environ["TAG"].lstrip("v")
+          src = pathlib.Path("ossie_guard/__init__.py").read_text(encoding="utf-8")
+          ver = re.search(r'__version__ = "([^"]+)"', src).group(1)
+          if tag != ver:
+              sys.exit(f"release tag {tag!r} != __version__ {ver!r} - one of them is wrong")
+          print("tag and __version__ agree:", ver)
+          PY
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+
+  publish:
+    needs: [test]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write            # required for Trusted Publishing (OIDC)
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+      - name: Build sdist + wheel
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+      - name: Check the artifacts PyPI will actually receive
+        run: python -m twine check dist/*
+      - name: Publish to PyPI (Trusted Publishing)
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
