@@ -1,0 +1,12 @@
+- id: ossie-guard
+  name: ossie-guard (semantic-model honesty & safety)
+  description: >-
+    Lint Apache Ossie semantic models for cross-dialect metric drift
+    (SUM vs AVG, wrong column, drifted constant) and impure or
+    non-deterministic expressions.
+  entry: ossie-guard
+  language: python
+  # Only YAML; consumers narrow this with `files:` to their model directory.
+  types: [yaml]
+  # A model file is the argument, so pass_filenames (default true) is right.
+  require_serial: false

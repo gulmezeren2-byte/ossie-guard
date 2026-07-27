@@ -23,22 +23,25 @@ $ ossie-guard model.yaml
 ```
 
 ```
-ossie-guard 0.1.0 - model.yaml
+ossie-guard 0.2.0 - model.yaml
 
   ERROR    AGGREGATE_DRIFT  -  revenue
            aggregate functions differ across dialects: ANSI_SQL=['SUM']; SNOWFLAKE=['AVG']
-           at semantic_model.metrics[0]
+           at model.yaml:8
 
   WARNING  COLUMN_DRIFT  -  gross_sales
            referenced columns differ across dialects; not shared by all: ss_ext_sales_price, ss_sales_price
-           at semantic_model.metrics[1]
+           at model.yaml:16
 
-  ERROR    UNSAFE_FUNCTION  -  leaky
-           [ANSI_SQL] expression calls side-effecting function 'pg_read_file()'; a metric must be a pure read
-           at semantic_model.metrics[2]
+  WARNING  LITERAL_DRIFT  -  revenue_with_tax
+           numeric constants differ across dialects: ANSI_SQL=['1.08']; SNOWFLAKE=['1.18']
+           at model.yaml:24
 
-  2 errors, 1 warning
+  1 error, 2 warnings
 ```
+
+*(That is the verbatim output for [`tests/fixtures/drift.yaml`](tests/fixtures/drift.yaml)
+— every example in this README is real tool output, not a mock-up.)*
 
 ## Install
 
@@ -56,33 +59,95 @@ Dependencies are exactly Ossie's own: `pyyaml` and `sqlglot`, nothing else.
 ## Use
 
 ```console
-ossie-guard model.yaml                 # human-readable report
-ossie-guard model.yaml --json          # machine-readable, for CI
-ossie-guard model.yaml --strict        # warnings fail too (default: only errors fail)
-ossie-guard model.yaml --no-determinism # turn a check off
+ossie-guard model.yaml                      # human-readable report
+ossie-guard models/*.yaml                   # several models in one run
+ossie-guard model.yaml --format json        # machine-readable
+ossie-guard model.yaml --format sarif       # SARIF 2.1.0 for GitHub code scanning
+ossie-guard model.yaml -o report.sarif      # write to a file instead of stdout
+ossie-guard model.yaml --fail-level warning # warnings fail too (default: error)
+ossie-guard model.yaml --no-determinism     # turn a check off
 ```
 
-Exit code is `0` when clean, `1` when an error is found (or any finding under
-`--strict`), `2` on a usage/file error — so it drops straight into CI:
+Exit code is `0` when clean, `1` when a finding at or above `--fail-level` is
+present, `2` on a usage/file error. `--fail-level none` never fails the run
+(useful when you only want the report), and `--strict` / `--exit-zero` remain as
+shorthands for `warning` / `none`.
+
+### GitHub Action (findings annotated on the pull request)
+
+`ossie-guard` ships as a composite action that lints your models and uploads
+SARIF to **code scanning**, so each finding appears inline on the exact line of
+the offending expression:
 
 ```yaml
 # .github/workflows/semantic-model.yml
-- run: python validation/validate.py model.yaml      # Ossie: does it parse?
-- run: pip install git+https://github.com/gulmezeren2-byte/ossie-guard
-- run: ossie-guard model.yaml                         # ossie-guard: does it agree, and is it pure?
+name: semantic-model
+on: [push, pull_request]
+
+permissions:
+  contents: read
+  security-events: write     # required to upload SARIF
+  # actions: read            # additionally required on PRIVATE repositories
+
+jobs:
+  ossie-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: gulmezeren2-byte/ossie-guard@v0.2.0
+        with:
+          path: models          # a file, a directory, or several paths
+          fail-level: error     # error | warning | note | none
 ```
 
-As a library:
+Run it after Ossie's own validator, which answers a different question:
+
+```yaml
+      - run: python validation/validate.py models/model.yaml   # does it parse?
+      - uses: gulmezeren2-byte/ossie-guard@v0.2.0              # does it agree, and is it pure?
+```
+
+Prefer plain steps? The CLI is just as CI-friendly:
+
+```yaml
+      - run: pip install git+https://github.com/gulmezeren2-byte/ossie-guard
+      - run: ossie-guard models/*.yaml
+```
+
+### pre-commit
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/gulmezeren2-byte/ossie-guard
+    rev: v0.2.0
+    hooks:
+      - id: ossie-guard
+        files: ^models/.*\.ya?ml$      # narrow it to your model directory
+```
+
+### As a library
 
 ```python
 from ossie_guard import lint_file, Severity
 
 findings = lint_file("model.yaml")
 for f in findings:
-    print(f.severity.value, f.code, f.entity, "-", f.message)
+    print(f"{f.severity.value} {f.code} {f.entity} (line {f.line}) - {f.message}")
 
 if any(f.severity is Severity.ERROR for f in findings):
     raise SystemExit(1)
+```
+
+Need SARIF from Python?
+
+```python
+import json
+from ossie_guard import __version__, lint_file
+from ossie_guard.sarif import to_sarif
+
+doc = to_sarif([("model.yaml", lint_file("model.yaml"))], tool_version=__version__)
+json.dump(doc, open("report.sarif", "w"), indent=2)
 ```
 
 ## What it checks
@@ -119,6 +184,17 @@ spelling**. Concretely:
 
 Treat the errors as high-confidence and the warnings as "a human should look."
 
+## How it's verified
+
+A linter that claims low false positives should prove it. Every push runs:
+
+| Check | What it proves |
+|-------|----------------|
+| **41 tests** on Python 3.9 / 3.11 / 3.12 / 3.13 / 3.14 | the checks behave the same on every supported runtime |
+| **Zero findings on Apache Ossie's own `flights` + `tpcds` examples** | it is not noisy on valid, real-world models |
+| **SARIF validated against the official OASIS 2.1.0 schema** (vendored, offline — plus an independent `check-jsonschema` pass in CI) | the report GitHub ingests is real SARIF, not "probably valid" |
+| **The composite action is dogfooded in CI** — it must produce a report, fail on a drifting model, and pass on a clean one | the action works as documented, not just in theory |
+
 ## Why this exists
 
 It comes from the same place as its sibling library
@@ -133,9 +209,12 @@ a check that looks past "does it parse."
 ## Development
 
 ```console
-pip install -e .
+pip install -e ".[dev]"     # adds pytest + jsonschema (for the SARIF schema test)
 python -m pytest -q
 ```
+
+The package itself depends only on `pyyaml` and `sqlglot`; everything in `[dev]`
+is test-only.
 
 ## License
 

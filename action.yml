@@ -1,0 +1,100 @@
+name: "ossie-guard"
+description: "Lint Apache Ossie semantic models for cross-dialect metric drift and impure/non-deterministic expressions, and upload the results to GitHub code scanning."
+author: "Mehmet Eren Gülmez"
+branding:
+  icon: "shield"
+  color: "purple"
+
+inputs:
+  path:
+    description: "Model file(s) or a directory to lint. A directory is scanned for *.yaml / *.yml. Space-separated for several targets."
+    required: false
+    default: "."
+  fail-level:
+    description: "Minimum severity that fails the run: error | warning | note | none."
+    required: false
+    default: "error"
+  python-version:
+    description: "Python version to set up."
+    required: false
+    default: "3.12"
+  upload-sarif:
+    description: "Whether to upload the SARIF report to code scanning (needs security-events: write)."
+    required: false
+    default: "true"
+
+outputs:
+  sarif-file:
+    description: "Path to the generated SARIF report (empty when no model files were found)."
+    value: ${{ steps.lint.outputs.sarif_file }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install ossie-guard (from this action's own checkout)
+      shell: bash
+      # GITHUB_ACTION_PATH points at where THIS action was checked out, not the
+      # consumer's repo -- that is how we install the bundled ossie-guard.
+      run: python -m pip install --upgrade "${GITHUB_ACTION_PATH}"
+
+    - name: Run ossie-guard
+      id: lint
+      shell: bash
+      env:
+        # Passed via env (never interpolated into the script body) so a crafted
+        # input cannot inject shell.
+        OSSIE_PATH: ${{ inputs.path }}
+        OSSIE_FAIL_LEVEL: ${{ inputs.fail-level }}
+      run: |
+        set +e
+        targets=()
+        for p in $OSSIE_PATH; do
+          if [ -d "$p" ]; then
+            while IFS= read -r f; do
+              targets+=("$f")
+            done < <(find "$p" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort)
+          else
+            targets+=("$p")
+          fi
+        done
+        if [ ${#targets[@]} -eq 0 ]; then
+          echo "ossie-guard: no YAML files found under '${OSSIE_PATH}' - nothing to lint."
+          {
+            echo "exit_code=0"
+            echo "sarif_written=false"
+            echo "sarif_file="
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        sarif="${RUNNER_TEMP}/ossie-guard.sarif"
+        printf 'ossie-guard: linting %d file(s)\n' "${#targets[@]}"
+        ossie-guard "${targets[@]}" --format sarif --output "$sarif" --fail-level "$OSSIE_FAIL_LEVEL"
+        code=$?
+        # Also print the human report so the job log is readable on its own.
+        ossie-guard "${targets[@]}" --fail-level none
+        if [ -f "$sarif" ]; then written=true; else written=false; sarif=""; fi
+        {
+          echo "exit_code=${code}"
+          echo "sarif_written=${written}"
+          echo "sarif_file=${sarif}"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Upload SARIF to code scanning
+      # runner.temp is outside GITHUB_WORKSPACE, so hashFiles() cannot see the
+      # report - gate on the step's own output instead.
+      if: ${{ always() && inputs.upload-sarif == 'true' && steps.lint.outputs.sarif_written == 'true' }}
+      uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+      with:
+        sarif_file: ${{ steps.lint.outputs.sarif_file }}
+        category: ossie-guard
+
+    - name: Enforce fail-level
+      # Runs after the upload so findings are still reported when the gate fails.
+      if: ${{ always() }}
+      shell: bash
+      run: exit ${{ steps.lint.outputs.exit_code }}

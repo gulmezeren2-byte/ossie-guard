@@ -43,6 +43,9 @@ class Finding:
         message:  a one-line human explanation.
         path:     where in the YAML the carrier lives (dotted, e.g.
                   "semantic_model.metrics[3]").
+        line:     1-based line in the source YAML the finding anchors to (the
+                  offending dialect expression, or the carrier). None when the
+                  model was linted from an in-memory dict without line info.
         detail:   structured extras (e.g. the per-dialect values) for --json.
     """
 
@@ -51,6 +54,7 @@ class Finding:
     entity: str
     message: str
     path: str = ""
+    line: "int | None" = None
     detail: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -60,5 +64,6 @@ class Finding:
             "entity": self.entity,
             "message": self.message,
             "path": self.path,
+            "line": self.line,
             "detail": self.detail,
         }

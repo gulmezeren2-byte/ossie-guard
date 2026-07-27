@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ossie-guard"
-version = "0.1.0"
+version = "0.2.0"
 description = "Honesty & safety linter for Apache Ossie semantic models: catches cross-dialect metric drift and impure/non-deterministic expressions the schema validator can't see."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -27,6 +27,7 @@ dependencies = [
     "pyyaml>=6.0",
     "sqlglot>=25.0",
 ]
+
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -36,6 +37,14 @@ classifiers = [
     "Topic :: Database",
     "Topic :: Software Development :: Quality Assurance",
     "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+# Test-only. The shipped package keeps its two-dependency footprint; these are
+# what CI installs to run the suite and schema-validate the SARIF output.
+dev = [
+    "pytest>=7.0",
+    "jsonschema>=4.18",
 ]
 
 [project.urls]
