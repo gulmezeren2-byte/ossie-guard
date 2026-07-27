@@ -1,5 +1,7 @@
 # ossie-guard
 
+🇹🇷 **Türkçesi:** [README.tr.md](README.tr.md)
+
 **An honesty & safety linter for [Apache Ossie](https://github.com/apache/ossie) semantic models.**
 
 Apache Ossie (the reference implementation of the Open Semantic Interchange) lets one
