@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ossie-guard"
-version = "0.2.0"
+version = "0.3.0"
 description = "Honesty & safety linter for Apache Ossie semantic models: catches cross-dialect metric drift and impure/non-deterministic expressions the schema validator can't see."
 readme = "README.md"
 requires-python = ">=3.9"

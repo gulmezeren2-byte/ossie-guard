@@ -25,7 +25,7 @@ $ ossie-guard model.yaml
 ```
 
 ```
-ossie-guard 0.2.0 - model.yaml
+ossie-guard 0.3.0 - model.yaml
 
   ERROR    AGGREGATE_DRIFT  -  revenue
            aggregate functions differ across dialects: ANSI_SQL=['SUM']; SNOWFLAKE=['AVG']
@@ -68,6 +68,8 @@ ossie-guard model.yaml --format sarif       # SARIF 2.1.0 for GitHub code scanni
 ossie-guard model.yaml -o report.sarif      # write to a file instead of stdout
 ossie-guard model.yaml --fail-level warning # warnings fail too (default: error)
 ossie-guard model.yaml --no-determinism     # turn a check off
+ossie-guard models/*.yaml --write-baseline .ossie-guard-baseline.json   # adopt on an existing model
+ossie-guard models/*.yaml --baseline .ossie-guard-baseline.json         # fail only on NEW findings
 ```
 
 Exit code is `0` when clean, `1` when a finding at or above `--fail-level` is
@@ -96,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: gulmezeren2-byte/ossie-guard@v0.2.0
+      - uses: gulmezeren2-byte/ossie-guard@v0.3.0
         with:
           path: models          # a file, a directory, or several paths
           fail-level: error     # error | warning | note | none
@@ -106,7 +108,7 @@ Run it after Ossie's own validator, which answers a different question:
 
 ```yaml
       - run: python validation/validate.py models/model.yaml   # does it parse?
-      - uses: gulmezeren2-byte/ossie-guard@v0.2.0              # does it agree, and is it pure?
+      - uses: gulmezeren2-byte/ossie-guard@v0.3.0              # does it agree, and is it pure?
 ```
 
 Prefer plain steps? The CLI is just as CI-friendly:
@@ -122,7 +124,7 @@ Prefer plain steps? The CLI is just as CI-friendly:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/gulmezeren2-byte/ossie-guard
-    rev: v0.2.0
+    rev: v0.3.0
     hooks:
       - id: ossie-guard
         files: ^models/.*\.ya?ml$      # narrow it to your model directory
@@ -159,7 +161,8 @@ json.dump(doc, open("report.sarif", "w"), indent=2)
 | `AGGREGATE_DRIFT` | error | The aggregate class differs across a metric's dialects (`SUM` vs `AVG`, `COUNT` vs `COUNT DISTINCT`). Almost always a bug. |
 | `UNSAFE_FUNCTION` | error | An expression calls a side-effecting function (file/socket/shell/executor): `pg_read_file`, `dblink`, `xp_cmdshell`, `load_file`, `load_extension`, … |
 | `COLUMN_DRIFT` | warning | The set of referenced columns differs across dialects — often a copy-paste that left one dialect on the wrong column. |
-| `LITERAL_DRIFT` | warning | A numeric constant differs across dialects (a tax rate that drifted from `1.08` to `1.18`). |
+| `LITERAL_DRIFT` | warning | A constant used in **arithmetic** differs across dialects (a tax rate that drifted from `* 1.08` to `* 1.18`). |
+| `PREDICATE_DRIFT` | warning | The **filter conditions** differ across dialects — a drifted string constant (`region = 'EU'` vs `'US'`) or operator (`> 100` vs `>= 100`) changes which rows are counted. |
 | `NONDETERMINISTIC` | warning | The expression uses `NOW()`, `CURRENT_DATE`, `RANDOM()`, `UUID()`, … — the same run can return different numbers. |
 | `PARSE_ERROR` | info | An expression a parser could not read; deeper checks were skipped for it. |
 
@@ -172,19 +175,55 @@ worse than none.
 equivalence is undecidable, and the whole point of multi-dialect expressions is
 that they legitimately differ (`COALESCE` on one engine, `NVL` on another). So
 `ossie-guard` deliberately compares only a *structural signature* — aggregate
-classes, referenced columns, numeric literals — and **ignores benign dialect
-spelling**. Concretely:
+classes, referenced columns, arithmetic constants, and filter predicates — and
+**ignores benign dialect spelling**. Concretely:
 
-- ✅ It catches `SUM` vs `AVG`, a wrong column, a drifted constant, `COUNT` vs
-  `COUNT DISTINCT`.
-- ✅ It does **not** flag `AVG(COALESCE(price, 0))` vs `AVG(NVL(price, 0))` — same
-  signature, different spelling. (Verified against the official `flights` and
-  `tpcds` example models: **zero findings**.)
+- ✅ It catches `SUM` vs `AVG`, a wrong column, a drifted arithmetic constant,
+  `COUNT` vs `COUNT DISTINCT`, and a drifted filter (a string constant or an
+  operator).
+- ✅ It does **not** flag expressions that differ only in idiom. All of these
+  compare **equal**:
+
+  | one dialect | the other | why it's not drift |
+  |---|---|---|
+  | `AVG(COALESCE(price, 0))` | `AVG(NVL(price, 0))` | same signature, different spelling |
+  | `SUM(CASE WHEN s = 1 THEN amt ELSE 0 END)` | `SUM(amt) FILTER (WHERE s = 1)` | same filter, different construct |
+  | `SUM(CASE WHEN s = 1 THEN amt ELSE 0 END)` | `SUM(IF(s = 1, amt, 0))` | same filter, BigQuery idiom |
+  | `is_active = TRUE` | `is_active = 1` | engines spell booleans differently |
+  | `amt > 100` | `100 < amt` | operands written the other way round |
+  | `status IN (1, 2)` | `status IN (2, 1)` | order in an `IN` list carries no meaning |
+  | `DATE_FORMAT(d, '%Y-%m')` | `FORMAT_DATE('%Y-%m', d)` | a format string is not a filter |
+
+  (Verified against the official `flights` and `tpcds` example models: **zero
+  findings**.)
 - ⚠️ It will **not** catch a semantic difference that leaves the signature
-  identical — e.g. a `WHERE`/`FILTER` predicate that differs across dialects, or a
-  join grain that changes the meaning. Those need a human or an empirical test.
+  identical — e.g. a join grain that changes the meaning, a different `GROUP BY`
+  context, or a filter whose *columns, operators and values* all match but whose
+  boolean structure differs (`A AND B` vs `A OR B`). Those need a human or an
+  empirical test.
 
 Treat the errors as high-confidence and the warnings as "a human should look."
+
+### Adopting it on a model that already has findings
+
+Run it once, record what is already there, and let CI fail only on **new**
+findings:
+
+```console
+ossie-guard models/*.yaml --write-baseline .ossie-guard-baseline.json
+git add .ossie-guard-baseline.json
+```
+
+```yaml
+      - uses: gulmezeren2-byte/ossie-guard@v0.3.0
+        with:
+          path: models
+          baseline: .ossie-guard-baseline.json
+```
+
+A baselined finding is identified without its line number, so reformatting a
+model will not resurrect it, and entries that no longer occur are reported so the
+file can be pruned. It is a ratchet, not a mute button.
 
 ## How it's verified
 
@@ -192,7 +231,7 @@ A linter that claims low false positives should prove it. Every push runs:
 
 | Check | What it proves |
 |-------|----------------|
-| **41 tests** on Python 3.9 / 3.11 / 3.12 / 3.13 / 3.14 | the checks behave the same on every supported runtime |
+| **62 tests** on Python 3.9 / 3.11 / 3.12 / 3.13 / 3.14 | the checks behave the same on every supported runtime |
 | **Zero findings on Apache Ossie's own `flights` + `tpcds` examples** | it is not noisy on valid, real-world models |
 | **SARIF validated against the official OASIS 2.1.0 schema** (vendored, offline — plus an independent `check-jsonschema` pass in CI) | the report GitHub ingests is real SARIF, not "probably valid" |
 | **The composite action is dogfooded in CI** — it must produce a report, fail on a drifting model, and pass on a clean one | the action works as documented, not just in theory |

@@ -4,6 +4,37 @@ All notable changes to `ossie-guard` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project aims to follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-07-27
+
+Closes the biggest gap the README admitted to, and removes two false positives
+found while proving the new check was safe.
+
+### Added
+- **`PREDICATE_DRIFT` (warning)** — the filter conditions a metric applies are now
+  compared across dialects. This catches the two drifts the other axes structurally
+  could not see: a **string** constant (`region = 'EU'` vs `region = 'US'` — same
+  columns, no numeric literals) and a drifted **operator** (`amt > 100` vs
+  `amt >= 100`). Only comparison nodes are read, and each is normalised, so the
+  three idiomatic ways of writing the same filter — `CASE WHEN`,
+  `FILTER (WHERE …)`, `IF(…)` — as well as `TRUE`/`1`, `100`/`100.0`,
+  flipped operands and `IN` list order all compare **equal**. Dialect-specific
+  format strings (`DATE_FORMAT(d, '%Y-%m')`) are never compared.
+- **Baselines** (`--write-baseline FILE`, `--baseline FILE`) so the tool can be
+  adopted on a model that already has findings: recorded findings stop failing CI
+  while anything **new** still does. Identity is line-independent (reformatting a
+  model does not resurrect suppressed findings) and is the *same* fingerprint the
+  SARIF report carries. Stale entries are reported so the file can be pruned.
+- A `baseline` input on the GitHub Action.
+
+### Fixed
+- **Two false positives in `LITERAL_DRIFT`.** It compared *every* numeric literal,
+  which made it sensitive to harmless idiom: `SUM(CASE WHEN x THEN amt ELSE 0 END)`
+  carries a structural `0` that `SUM(amt) FILTER (WHERE x)` does not, and
+  `is_active = 1` carries a number where `is_active = TRUE` does not — so two
+  equivalent expressions were flagged. The axis now reads only literals used in
+  **arithmetic** (its actual purpose: a drifted `* 1.08`), and constants used in
+  comparisons belong to `PREDICATE_DRIFT`, which normalises those spellings.
+
 ## [0.2.0] - 2026-07-24
 
 Turns ossie-guard from a CLI into something that plugs into a team's pipeline:

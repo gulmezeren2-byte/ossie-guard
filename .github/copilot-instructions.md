@@ -18,7 +18,8 @@ reproducible read**.
 | Path | Role |
 |------|------|
 | `ossie_guard/linter.py` | orchestration: line-aware YAML load, structure-agnostic walk of every `expression.dialects` carrier, runs the checks |
-| `ossie_guard/signature.py` | cross-dialect **drift** via a structural signature (aggregates / columns / numeric literals) |
+| `ossie_guard/signature.py` | cross-dialect **drift** via a structural signature (aggregates / columns / arithmetic literals / filter predicates) |
+| `ossie_guard/baseline.py` | baseline files: line-independent finding identity, shared with the SARIF fingerprint |
 | `ossie_guard/purity.py` | side-effecting-function denylist + non-determinism detection |
 | `ossie_guard/parsing.py` | parse one scalar expression with sqlglot (bare, then wrapped in `SELECT`) |
 | `ossie_guard/dialects.py` | Ossie dialect → sqlglot dialect; `SKIP` for MDX/Tableau/MAQL |
@@ -26,7 +27,7 @@ reproducible read**.
 | `ossie_guard/sarif.py` | SARIF 2.1.0 rendering for GitHub code scanning |
 | `ossie_guard/cli.py` | argparse CLI, output formats, exit codes |
 | `action.yml` | composite GitHub Action (lint + upload SARIF) |
-| `tests/fixtures/` | `clean.yaml` (must stay finding-free), `drift.yaml`, `unsafe.yaml` |
+| `tests/fixtures/` | `clean.yaml` and the idiomatic metrics in `predicates.yaml` **must stay finding-free**; `drift.yaml`, `unsafe.yaml`, `predicates.yaml` carry deliberate findings |
 | `tests/schema/` | vendored OASIS SARIF 2.1.0 schema (test-only) |
 
 ## Commands
@@ -55,6 +56,13 @@ ossie-guard tests/fixtures/*.yaml --format sarif -o out.sarif --fail-level none
 - **Finding codes are a public API.** They appear in SARIF, JSON, and users' CI
   gates. Renaming one is a breaking change; add new codes instead, and give each
   a `_RULES` entry in `sarif.py` (GitHub requires `help.text`).
+- **Signature axes are separated by purpose.** `literals` reads only *arithmetic*
+  operands and `predicates` owns constants inside comparisons. That split is not
+  cosmetic: comparing every numeric literal made `LITERAL_DRIFT` fire on
+  `ELSE 0` vs a `FILTER` clause and on `TRUE` vs `1`. Do not widen it back.
+- **A finding's identity (`baseline.fingerprint`) excludes the line number** so
+  reformatting a model does not resurrect a baselined finding, and SARIF uses the
+  same function. Changing it invalidates users' baseline files.
 - **Every finding carries a line.** `linter.py` uses a `SafeLoader` subclass that
   stamps mappings with `__line__`; that synthetic key must be skipped when
   walking. Safety/determinism findings anchor to the exact dialect expression,

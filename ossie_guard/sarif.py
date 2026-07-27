@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import posixpath
 
+from .baseline import fingerprint
 from .findings import Finding, Severity
 
 _INFO_URI = "https://github.com/gulmezeren2-byte/ossie-guard"
@@ -52,6 +53,14 @@ _RULES = {
     "LITERAL_DRIFT": (
         "A numeric constant differs across a metric's dialects.",
         "A hard-coded rate that drifted between dialects (e.g. 1.08 vs 1.18).",
+        ["semantic-layer", "correctness", "cross-dialect"],
+    ),
+    "PREDICATE_DRIFT": (
+        "A metric's dialects filter on different conditions.",
+        "The comparisons a metric filters on are not the same in every dialect - a "
+        "drifted string constant (region = 'EU' vs 'US') or operator (> vs >=) "
+        "changes which rows are counted. Idiomatic differences (CASE WHEN vs "
+        "FILTER vs IF) are normalised away, so this points at a real difference.",
         ["semantic-layer", "correctness", "cross-dialect"],
     ),
     "UNSAFE_FUNCTION": (
@@ -140,7 +149,8 @@ def to_sarif(file_findings, *, tool_version: str) -> dict:
                         }
                     ],
                     "partialFingerprints": {
-                        "ossieGuard/v1": f"{uri}:{finding.code}:{finding.entity}:{finding.path}"
+                        # Same identity a baseline file uses, so the two agree.
+                        "ossieGuard/v1": fingerprint(uri, finding)
                     },
                 }
             )

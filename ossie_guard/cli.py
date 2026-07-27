@@ -17,7 +17,7 @@ import argparse
 import json
 import sys
 
-from . import __version__
+from . import __version__, baseline
 from .findings import Severity
 from .linter import lint_file
 from .sarif import to_sarif
@@ -76,6 +76,17 @@ def _build_parser() -> argparse.ArgumentParser:
         "--exit-zero",
         action="store_true",
         help="shorthand for --fail-level none (generate SARIF without failing)",
+    )
+    parser.add_argument(
+        "--baseline",
+        metavar="FILE",
+        help="suppress findings recorded in FILE, so CI fails only on new ones",
+    )
+    parser.add_argument(
+        "--write-baseline",
+        metavar="FILE",
+        help="record the current findings to FILE and exit 0 (adopt on an "
+        "existing model without fixing everything first)",
     )
     parser.add_argument(
         "--no-safety", action="store_true", help="skip the side-effecting-function check"
@@ -170,6 +181,36 @@ def main(argv=None) -> int:
             continue
         file_findings.append((model, findings))
 
+    if args.write_baseline:
+        with open(args.write_baseline, "w", encoding="utf-8") as handle:
+            json.dump(baseline.build(file_findings), handle, indent=2)
+            handle.write("\n")
+        total = sum(len(f) for _, f in file_findings)
+        print(
+            f"ossie-guard: recorded {total} finding(s) in {args.write_baseline}; "
+            f"future runs fail only on new ones"
+        )
+        return 2 if load_error else 0
+
+    suppressed, stale = 0, []
+    if args.baseline:
+        try:
+            known = baseline.load(args.baseline)
+        except FileNotFoundError:
+            print(
+                f"ossie-guard: no such baseline file: {args.baseline} "
+                f"(create one with --write-baseline)",
+                file=sys.stderr,
+            )
+            return 2
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(
+                f"ossie-guard: could not read the baseline {args.baseline}: {exc}",
+                file=sys.stderr,
+            )
+            return 2
+        file_findings, suppressed, stale = baseline.apply(file_findings, known)
+
     if output == "sarif":
         doc = to_sarif(file_findings, tool_version=__version__)
         text = json.dumps(doc, indent=2, ensure_ascii=False)
@@ -189,6 +230,20 @@ def main(argv=None) -> int:
             handle.write(text + "\n")
     else:
         print(text)
+
+    # Baseline bookkeeping goes to stderr so it never pollutes a JSON/SARIF pipe.
+    if suppressed:
+        print(
+            f"ossie-guard: {suppressed} known finding(s) suppressed by "
+            f"{args.baseline}",
+            file=sys.stderr,
+        )
+    if stale:
+        print(
+            f"ossie-guard: {len(stale)} baseline entr{'y' if len(stale) == 1 else 'ies'} "
+            f"no longer occur and can be pruned from {args.baseline}",
+            file=sys.stderr,
+        )
 
     # A missing/unreadable file is a usage error regardless of --fail-level.
     if load_error:

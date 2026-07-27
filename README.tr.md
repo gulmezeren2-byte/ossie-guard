@@ -26,7 +26,7 @@ $ ossie-guard model.yaml
 ```
 
 ```
-ossie-guard 0.2.0 - model.yaml
+ossie-guard 0.3.0 - model.yaml
 
   ERROR    AGGREGATE_DRIFT  -  revenue
            aggregate functions differ across dialects: ANSI_SQL=['SUM']; SNOWFLAKE=['AVG']
@@ -70,6 +70,8 @@ ossie-guard model.yaml --format sarif       # GitHub code scanning için SARIF 2
 ossie-guard model.yaml -o report.sarif      # stdout yerine dosyaya yaz
 ossie-guard model.yaml --fail-level warning # uyarılar da başarısız yapar (varsayılan: error)
 ossie-guard model.yaml --no-determinism     # bir kontrolü kapat
+ossie-guard models/*.yaml --write-baseline .ossie-guard-baseline.json   # mevcut modelde benimseme
+ossie-guard models/*.yaml --baseline .ossie-guard-baseline.json         # yalnız YENİ bulgularda başarısız
 ```
 
 Çıkış kodu: temizse `0`, `--fail-level` eşiğinde veya üzerinde bir bulgu varsa
@@ -98,7 +100,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: gulmezeren2-byte/ossie-guard@v0.2.0
+      - uses: gulmezeren2-byte/ossie-guard@v0.3.0
         with:
           path: models          # bir dosya, bir dizin ya da birden fazla yol
           fail-level: error     # error | warning | note | none
@@ -109,7 +111,7 @@ yanıtlar:
 
 ```yaml
       - run: python validation/validate.py models/model.yaml   # parse ediliyor mu?
-      - uses: gulmezeren2-byte/ossie-guard@v0.2.0              # uyuşuyor mu ve saf mı?
+      - uses: gulmezeren2-byte/ossie-guard@v0.3.0              # uyuşuyor mu ve saf mı?
 ```
 
 Düz adımları mı tercih ediyorsunuz? CLI de CI dostu:
@@ -125,7 +127,7 @@ Düz adımları mı tercih ediyorsunuz? CLI de CI dostu:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/gulmezeren2-byte/ossie-guard
-    rev: v0.2.0
+    rev: v0.3.0
     hooks:
       - id: ossie-guard
         files: ^models/.*\.ya?ml$      # kendi model dizininize daraltın
@@ -151,7 +153,8 @@ if any(f.severity is Severity.ERROR for f in findings):
 | `AGGREGATE_DRIFT` | error | Bir metriğin lehçeleri arasında agregat sınıfı farklı (`SUM` vs `AVG`, `COUNT` vs `COUNT DISTINCT`). Neredeyse her zaman bir hatadır. |
 | `UNSAFE_FUNCTION` | error | İfade yan-etkili bir fonksiyon çağırıyor (dosya/soket/kabuk/executor): `pg_read_file`, `dblink`, `xp_cmdshell`, `load_file`, `load_extension`, … |
 | `COLUMN_DRIFT` | warning | Başvurulan sütun kümesi lehçeler arasında farklı — sıklıkla bir lehçeyi yanlış sütunda bırakan kopyala-yapıştır. |
-| `LITERAL_DRIFT` | warning | Sayısal bir sabit lehçeler arasında farklı (`1.08`'den `1.18`'e kaymış bir vergi oranı). |
+| `LITERAL_DRIFT` | warning | **Aritmetikte** kullanılan bir sabit lehçeler arasında farklı (`* 1.08`'den `* 1.18`'e kaymış bir vergi oranı). |
+| `PREDICATE_DRIFT` | warning | **Filtre koşulları** lehçeler arasında farklı — kaymış bir metin sabiti (`region = 'EU'` vs `'US'`) ya da operatör (`> 100` vs `>= 100`) hangi satırların sayıldığını değiştirir. |
 | `NONDETERMINISTIC` | warning | İfade `NOW()`, `CURRENT_DATE`, `RANDOM()`, `UUID()` … kullanıyor — aynı koşu farklı sayılar döndürebilir. |
 | `PARSE_ERROR` | info | Parse edilemeyen bir ifade; onun için derin kontroller atlandı. |
 
@@ -164,20 +167,53 @@ linter hiç olmamasından kötüdür.
 Gerçek SQL denkliği karar verilemezdir ve çok-lehçeli ifadelerin tüm amacı meşru
 şekilde farklı olmalarıdır (bir motorda `COALESCE`, diğerinde `NVL`). Bu yüzden
 `ossie-guard` bilinçli olarak yalnızca bir *yapısal imzayı* karşılaştırır —
-agregat sınıfları, başvurulan sütunlar, sayısal sabitler — ve **iyi huylu lehçe
-yazımını yok sayar**. Somut olarak:
+agregat sınıfları, başvurulan sütunlar, aritmetik sabitler ve filtre
+predikatları — ve **iyi huylu lehçe yazımını yok sayar**. Somut olarak:
 
-- ✅ `SUM` vs `AVG`, yanlış sütun, kaymış sabit, `COUNT` vs `COUNT DISTINCT`
-  yakalanır.
-- ✅ `AVG(COALESCE(price, 0))` ile `AVG(NVL(price, 0))` **işaretlenmez** — aynı
-  imza, farklı yazım. (Resmî `flights` ve `tpcds` örnek modellerine karşı
-  doğrulandı: **sıfır bulgu**.)
-- ⚠️ İmzayı aynı bırakan anlamsal bir farkı **yakalamaz** — örneğin lehçeler
-  arasında değişen bir `WHERE`/`FILTER` koşulu ya da anlamı değiştiren bir join
-  granülerliği. Bunlar bir insan ya da ampirik bir test gerektirir.
+- ✅ `SUM` vs `AVG`, yanlış sütun, kaymış aritmetik sabit, `COUNT` vs
+  `COUNT DISTINCT` ve kaymış bir filtre (metin sabiti ya da operatör) yakalanır.
+- ✅ Yalnızca yazım/idiom farkı olan ifadeler **işaretlenmez**. Aşağıdakilerin
+  hepsi **eşit** sayılır:
+
+  | bir lehçe | diğeri | neden kayma değil |
+  |---|---|---|
+  | `AVG(COALESCE(price, 0))` | `AVG(NVL(price, 0))` | aynı imza, farklı yazım |
+  | `SUM(CASE WHEN s = 1 THEN amt ELSE 0 END)` | `SUM(amt) FILTER (WHERE s = 1)` | aynı filtre, farklı yapı |
+  | `SUM(CASE WHEN s = 1 THEN amt ELSE 0 END)` | `SUM(IF(s = 1, amt, 0))` | aynı filtre, BigQuery idiomu |
+  | `is_active = TRUE` | `is_active = 1` | motorlar boolean'ı farklı yazar |
+  | `amt > 100` | `100 < amt` | operandlar ters yazılmış |
+  | `status IN (1, 2)` | `status IN (2, 1)` | `IN` listesinde sıra anlam taşımaz |
+  | `DATE_FORMAT(d, '%Y-%m')` | `FORMAT_DATE('%Y-%m', d)` | format string bir filtre değildir |
+
+  (Resmî `flights` ve `tpcds` örnek modellerine karşı doğrulandı: **sıfır bulgu**.)
+- ⚠️ İmzayı aynı bırakan anlamsal bir farkı **yakalamaz** — anlamı değiştiren bir
+  join granülerliği, farklı bir `GROUP BY` bağlamı ya da sütun/operatör/değerleri
+  aynı olup boolean yapısı değişen bir filtre (`A AND B` vs `A OR B`). Bunlar bir
+  insan ya da ampirik bir test gerektirir.
 
 Hataları (error) yüksek güvenli, uyarıları (warning) "bir insan bakmalı" olarak
 değerlendirin.
+
+### Zaten bulgusu olan bir modelde benimseme
+
+Bir kez koşun, halihazırda var olanı kaydedin ve CI'ın yalnızca **yeni** bulgularda
+başarısız olmasını sağlayın:
+
+```console
+ossie-guard models/*.yaml --write-baseline .ossie-guard-baseline.json
+git add .ossie-guard-baseline.json
+```
+
+```yaml
+      - uses: gulmezeren2-byte/ossie-guard@v0.3.0
+        with:
+          path: models
+          baseline: .ossie-guard-baseline.json
+```
+
+Baseline'a alınan bir bulgu satır numarası olmadan kimliklendirilir; yani modeli
+yeniden biçimlendirmek onu geri getirmez. Artık oluşmayan kayıtlar raporlanır ki
+dosya temizlenebilsin. Bu bir mandal (ratchet), sesi kapatma düğmesi değil.
 
 ## Nasıl doğrulanıyor
 
@@ -186,7 +222,7 @@ Düşük yanlış-pozitif iddia eden bir linter bunu kanıtlamalıdır. Her push
 
 | Kontrol | Neyi kanıtlar |
 |---------|---------------|
-| **41 test**, Python 3.9 / 3.11 / 3.12 / 3.13 / 3.14 | kontroller desteklenen her sürümde aynı davranıyor |
+| **62 test**, Python 3.9 / 3.11 / 3.12 / 3.13 / 3.14 | kontroller desteklenen her sürümde aynı davranıyor |
 | **Apache Ossie'nin kendi `flights` + `tpcds` örneklerinde sıfır bulgu** | geçerli, gerçek dünya modellerinde gürültü yapmıyor |
 | **SARIF, resmî OASIS 2.1.0 şemasına karşı doğrulanıyor** (çevrimdışı olması için repoya gömülü — ayrıca CI'da bağımsız bir `check-jsonschema` geçişi) | GitHub'ın aldığı rapor gerçek SARIF, "muhtemelen geçerli" değil |
 | **Composite action CI'da kendi üzerinde koşuyor** — rapor üretmeli, kayan bir modelde başarısız olmalı, temiz modelde geçmeli | action belgelendiği gibi çalışıyor, yalnızca teoride değil |

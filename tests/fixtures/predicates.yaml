@@ -1,0 +1,55 @@
+version: 0.2.0.dev0
+name: PredicateModel
+description: >-
+  Metrics whose filter conditions drift, alongside metrics that only differ by
+  dialect idiom. The idiomatic ones must stay finding-free - that is the whole
+  bargain of the predicate check.
+semantic_model:
+  metrics:
+    # The filter's string constant drifted. Columns match and there is no
+    # arithmetic constant, so only the predicate axis can see this.
+    - name: eu_revenue
+      expression:
+        dialects:
+          - dialect: ANSI_SQL
+            expression: SUM(CASE WHEN region = 'EU' THEN amount ELSE 0 END)
+          - dialect: SNOWFLAKE
+            expression: SUM(CASE WHEN region = 'US' THEN amount ELSE 0 END)
+
+    # The operator drifted: > excludes exactly 100, >= includes it.
+    - name: large_orders
+      expression:
+        dialects:
+          - dialect: ANSI_SQL
+            expression: COUNT(CASE WHEN amount > 100 THEN 1 END)
+          - dialect: SNOWFLAKE
+            expression: COUNT(CASE WHEN amount >= 100 THEN 1 END)
+
+    # --- The following must produce NO findings: same filter, different idiom ---
+
+    # CASE WHEN vs the FILTER clause.
+    - name: paid_revenue
+      expression:
+        dialects:
+          - dialect: ANSI_SQL
+            expression: SUM(CASE WHEN status = 1 THEN amount ELSE 0 END)
+          - dialect: SNOWFLAKE
+            expression: SUM(amount) FILTER (WHERE status = 1)
+
+    # A boolean spelled as TRUE on one engine and 1 on another.
+    - name: active_revenue
+      expression:
+        dialects:
+          - dialect: ANSI_SQL
+            expression: SUM(CASE WHEN is_active = TRUE THEN amount END)
+          - dialect: SNOWFLAKE
+            expression: SUM(CASE WHEN is_active = 1 THEN amount END)
+
+    # The comparison written from the other side.
+    - name: big_amounts
+      expression:
+        dialects:
+          - dialect: ANSI_SQL
+            expression: SUM(CASE WHEN amount > 100 THEN amount END)
+          - dialect: SNOWFLAKE
+            expression: SUM(CASE WHEN 100 < amount THEN amount END)
