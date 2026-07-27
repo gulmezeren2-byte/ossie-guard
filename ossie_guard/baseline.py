@@ -6,27 +6,27 @@ check on" is how a useful check ends up switched off. A baseline records what wa
 already there so CI only fails on **new** findings -- a ratchet, not a cliff.
 
 The identity of a finding deliberately excludes its line number, so moving a
-metric or reformatting the YAML does not resurrect a baselined finding. It is the
-same fingerprint the SARIF report carries, so the two views agree.
+metric or reformatting the YAML does not resurrect a baselined finding. It comes
+from `identity.fingerprint`, the same function the SARIF report uses, so the two
+views can never disagree.
 """
 
 from __future__ import annotations
 
 import json
 
+from .identity import fingerprint
+
+__all__ = ["fingerprint", "build", "load", "apply"]
+
 _VERSION = 1
-
-
-def fingerprint(uri: str, finding) -> str:
-    """A line-independent identity for one finding."""
-    return f"{uri}:{finding.code}:{finding.entity}:{finding.path}"
 
 
 def build(file_findings) -> dict:
     """Build a baseline document from `(model_path, findings)` pairs."""
     entries = sorted(
         {
-            fingerprint(path.replace("\\", "/"), finding)
+            fingerprint(path, finding)
             for path, findings in file_findings
             for finding in findings
         }
@@ -65,10 +65,9 @@ def apply(file_findings, known: "set[str]"):
     suppressed = 0
     seen = set()
     for path, findings in file_findings:
-        uri = path.replace("\\", "/")
         remaining = []
         for finding in findings:
-            token = fingerprint(uri, finding)
+            token = fingerprint(path, finding)
             seen.add(token)
             if token in known:
                 suppressed += 1

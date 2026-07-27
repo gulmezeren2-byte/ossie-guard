@@ -14,10 +14,8 @@ GitHub's own minimal example uses exactly that.
 
 from __future__ import annotations
 
-import posixpath
-
-from .baseline import fingerprint
 from .findings import Finding, Severity
+from .identity import fingerprint, normalize_path
 
 _INFO_URI = "https://github.com/gulmezeren2-byte/ossie-guard"
 _HELP_URI = _INFO_URI + "#what-it-checks"
@@ -84,14 +82,9 @@ _RULES = {
 }
 
 
-def _uri(model_path: str) -> str:
-    """Return a repo-relative, forward-slashed URI for the model file."""
-    normalized = model_path.replace("\\", "/")
-    while normalized.startswith("./"):
-        normalized = normalized[2:]
-    # A leading drive or root is stripped so GitHub can match it against the
-    # checked-out tree; CI invokes ossie-guard with a repo-relative path anyway.
-    return posixpath.normpath(normalized).lstrip("/")
+# The URI a result points at, and the fingerprint that identifies it, both come
+# from ossie_guard.identity so a baseline file and this report always agree.
+_uri = normalize_path
 
 
 def to_sarif(file_findings, *, tool_version: str) -> dict:
@@ -150,7 +143,7 @@ def to_sarif(file_findings, *, tool_version: str) -> dict:
                     ],
                     "partialFingerprints": {
                         # Same identity a baseline file uses, so the two agree.
-                        "ossieGuard/v1": fingerprint(uri, finding)
+                        "ossieGuard/v1": fingerprint(model_path, finding)
                     },
                 }
             )

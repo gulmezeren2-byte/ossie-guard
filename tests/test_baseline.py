@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from ossie_guard import __version__, lint_file
 from ossie_guard.baseline import build, fingerprint, load
 from ossie_guard.cli import main
@@ -90,3 +92,31 @@ def test_baseline_file_is_readable_json(tmp_path):
     assert data["ossie_guard_baseline"] == 1
     assert isinstance(data["findings"], list) and data["findings"]
     assert load(str(bl)) == set(data["findings"])
+
+
+# --- the bug CI caught: identity must not depend on the path's shape --------
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "models/model.yaml",                       # repo-relative
+        "./models/model.yaml",                     # dot-prefixed
+        "/home/runner/work/repo/models/model.yaml",  # POSIX absolute (Linux CI)
+        r"C:\repo\models\model.yaml",   # Windows absolute
+    ],
+    ids=["relative", "dot-relative", "posix-absolute", "windows-absolute"],
+)
+def test_identity_agrees_between_sarif_and_baseline_for_any_path_shape(path):
+    """SARIF strips a leading separator to stay repo-relative; the baseline must
+    normalise identically or a baselined finding reappears as a new alert. This
+    first slipped through because the local path had no leading slash."""
+    findings = lint_file(DRIFT)
+    doc = to_sarif([(path, findings)], tool_version=__version__)
+    sarif_fps = {
+        r["partialFingerprints"]["ossieGuard/v1"] for r in doc["runs"][0]["results"]
+    }
+    assert sarif_fps == set(build([(path, findings)])["findings"])
+    # and the URI the report points at carries no leading separator or backslash
+    for result in doc["runs"][0]["results"]:
+        uri = result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+        assert not uri.startswith("/") and "\\" not in uri
