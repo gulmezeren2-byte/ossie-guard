@@ -93,7 +93,7 @@ jobs:
   ossie-guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: gulmezeren2-byte/ossie-guard@v0.2.0
         with:
           path: models          # a file, a directory, or several paths
