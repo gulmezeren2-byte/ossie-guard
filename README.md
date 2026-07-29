@@ -22,30 +22,9 @@ the two things that actually make a metric trustworthy:
 `ossie-guard` is the layer that catches both. It is **complementary** to
 `validate.py`: run the schema validator first, then run `ossie-guard`.
 
-```console
-$ ossie-guard model.yaml
-```
+[![ossie-guard flagging cross-dialect metric drift and impure expressions: AGGREGATE_DRIFT on a metric that is SUM on one engine and AVG on another, COLUMN_DRIFT, LITERAL_DRIFT, an UNSAFE_FUNCTION calling pg_read_file, and two NONDETERMINISTIC findings](https://raw.githubusercontent.com/gulmezeren2-byte/ossie-guard/main/docs/assets/ossie-guard-cli.png)](https://github.com/gulmezeren2-byte/ossie-guard#what-it-checks)
 
-```
-ossie-guard 0.3.1 - model.yaml
-
-  ERROR    AGGREGATE_DRIFT  -  revenue
-           aggregate functions differ across dialects: ANSI_SQL=['SUM']; SNOWFLAKE=['AVG']
-           at model.yaml:8
-
-  WARNING  COLUMN_DRIFT  -  gross_sales
-           referenced columns differ across dialects; not shared by all: ss_ext_sales_price, ss_sales_price
-           at model.yaml:16
-
-  WARNING  LITERAL_DRIFT  -  revenue_with_tax
-           numeric constants differ across dialects: ANSI_SQL=['1.08']; SNOWFLAKE=['1.18']
-           at model.yaml:24
-
-  1 error, 2 warnings
-```
-
-*(That is the verbatim output for [`tests/fixtures/drift.yaml`](tests/fixtures/drift.yaml)
-— every example in this README is real tool output, not a mock-up.)*
+*Real output, not a mock-up: every finding above comes from [`tests/fixtures/`](tests/fixtures) — each one points at the exact line of the offending dialect expression. Run it yourself with the three commands below.*
 
 ## Install
 

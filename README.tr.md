@@ -21,30 +21,9 @@ kontrol **etmez**:
 `ossie-guard` ikisini de yakalayan katmandır. `validate.py`'nin **tamamlayıcısıdır**:
 önce şema doğrulayıcısını, sonra `ossie-guard`'ı çalıştırın.
 
-```console
-$ ossie-guard model.yaml
-```
+[![ossie-guard çapraz-lehçe metrik kaymasını ve saf olmayan ifadeleri yakalarken: bir motorda SUM diğerinde AVG olan metrikte AGGREGATE_DRIFT, COLUMN_DRIFT, LITERAL_DRIFT, pg_read_file çağıran UNSAFE_FUNCTION ve iki NONDETERMINISTIC bulgusu](https://raw.githubusercontent.com/gulmezeren2-byte/ossie-guard/main/docs/assets/ossie-guard-cli.png)](https://github.com/gulmezeren2-byte/ossie-guard/blob/main/README.tr.md#neleri-kontrol-eder)
 
-```
-ossie-guard 0.3.1 - model.yaml
-
-  ERROR    AGGREGATE_DRIFT  -  revenue
-           aggregate functions differ across dialects: ANSI_SQL=['SUM']; SNOWFLAKE=['AVG']
-           at model.yaml:8
-
-  WARNING  COLUMN_DRIFT  -  gross_sales
-           referenced columns differ across dialects; not shared by all: ss_ext_sales_price, ss_sales_price
-           at model.yaml:16
-
-  WARNING  LITERAL_DRIFT  -  revenue_with_tax
-           numeric constants differ across dialects: ANSI_SQL=['1.08']; SNOWFLAKE=['1.18']
-           at model.yaml:24
-
-  1 error, 2 warnings
-```
-
-*(Bu, [`tests/fixtures/drift.yaml`](tests/fixtures/drift.yaml) için aracın birebir
-çıktısıdır — bu dosyadaki her örnek gerçek çıktıdır, maket değil.)*
+*Gerçek çıktı, maket değil: yukarıdaki her bulgu [`tests/fixtures/`](tests/fixtures) içindeki dosyalardan geliyor ve her biri sorunlu lehçe ifadesinin tam satırını gösteriyor. Aşağıdaki üç komutla kendiniz çalıştırabilirsiniz.*
 
 ## Kurulum
 
