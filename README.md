@@ -25,7 +25,7 @@ $ ossie-guard model.yaml
 ```
 
 ```
-ossie-guard 0.3.0 - model.yaml
+ossie-guard 0.3.1 - model.yaml
 
   ERROR    AGGREGATE_DRIFT  -  revenue
            aggregate functions differ across dialects: ANSI_SQL=['SUM']; SNOWFLAKE=['AVG']
@@ -98,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: gulmezeren2-byte/ossie-guard@v0.3.0
+      - uses: gulmezeren2-byte/ossie-guard@v0.3.1
         with:
           path: models          # a file, a directory, or several paths
           fail-level: error     # error | warning | note | none
@@ -108,7 +108,7 @@ Run it after Ossie's own validator, which answers a different question:
 
 ```yaml
       - run: python validation/validate.py models/model.yaml   # does it parse?
-      - uses: gulmezeren2-byte/ossie-guard@v0.3.0              # does it agree, and is it pure?
+      - uses: gulmezeren2-byte/ossie-guard@v0.3.1              # does it agree, and is it pure?
 ```
 
 Prefer plain steps? The CLI is just as CI-friendly:
@@ -124,7 +124,7 @@ Prefer plain steps? The CLI is just as CI-friendly:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/gulmezeren2-byte/ossie-guard
-    rev: v0.3.0
+    rev: v0.3.1
     hooks:
       - id: ossie-guard
         files: ^models/.*\.ya?ml$      # narrow it to your model directory
@@ -215,7 +215,7 @@ git add .ossie-guard-baseline.json
 ```
 
 ```yaml
-      - uses: gulmezeren2-byte/ossie-guard@v0.3.0
+      - uses: gulmezeren2-byte/ossie-guard@v0.3.1
         with:
           path: models
           baseline: .ossie-guard-baseline.json

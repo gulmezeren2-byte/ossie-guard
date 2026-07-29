@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ossie-guard"
-version = "0.3.0"
+version = "0.3.1"
 description = "Honesty & safety linter for Apache Ossie semantic models: catches cross-dialect metric drift and impure/non-deterministic expressions the schema validator can't see."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -51,7 +51,7 @@ dev = [
 Homepage = "https://github.com/gulmezeren2-byte/ossie-guard"
 Repository = "https://github.com/gulmezeren2-byte/ossie-guard"
 "Apache Ossie" = "https://github.com/apache/ossie"
-"Sibling project (readonly-sql-guard)" = "https://github.com/gulmezeren2-byte/readonly-sql-guard"
+"readonly-sql-guard" = "https://github.com/gulmezeren2-byte/readonly-sql-guard"
 
 [project.scripts]
 ossie-guard = "ossie_guard.cli:main"

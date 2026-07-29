@@ -4,6 +4,21 @@ All notable changes to `ossie-guard` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and the project aims to follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] - 2026-07-29
+
+Metadata-only fix so the release can actually reach PyPI. No behaviour changes.
+
+### Fixed
+- A `[project.urls]` label was 36 characters; PyPI rejects Project-URL labels
+  over 32 and returned `400 Bad Request` at upload, after 0.3.0 had already been
+  tagged and released. `twine check` does not catch this - it validates that the
+  README renders, not the core-metadata length limits. The label is now
+  `readonly-sql-guard`, and `tests/test_packaging.py` asserts the limits PyPI
+  enforces so the failure happens in the test suite instead of costing a version.
+
+**0.3.0 was tagged and released on GitHub but never published to PyPI** for this
+reason; 0.3.1 is the first PyPI release and is otherwise identical.
+
 ## [0.3.0] - 2026-07-27
 
 Closes the biggest gap the README admitted to, and removes two false positives

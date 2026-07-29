@@ -21,5 +21,5 @@ from __future__ import annotations
 from .findings import Finding, Severity
 from .linter import lint_file, lint_model
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __all__ = ["lint_file", "lint_model", "Finding", "Severity", "__version__"]
