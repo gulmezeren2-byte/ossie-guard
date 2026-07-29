@@ -48,14 +48,9 @@ ossie-guard 0.3.1 - model.yaml
 
 ## Kurulum
 
-Bugün, doğrudan repodan çalışır:
-
 ```console
-pip install git+https://github.com/gulmezeren2-byte/ossie-guard
+pip install ossie-guard
 ```
-
-PyPI yayını (`pip install ossie-guard`) yolda — publish akışı Trusted Publishing
-için hazır ve ilk etiketli sürümde tetiklenir.
 
 Bağımlılıklar tam olarak Ossie'nin kendi bağımlılıkları: `pyyaml` ve `sqlglot`,
 başka hiçbir şey.
@@ -117,7 +112,7 @@ yanıtlar:
 Düz adımları mı tercih ediyorsunuz? CLI de CI dostu:
 
 ```yaml
-      - run: pip install git+https://github.com/gulmezeren2-byte/ossie-guard
+      - run: pip install ossie-guard
       - run: ossie-guard models/*.yaml
 ```
 

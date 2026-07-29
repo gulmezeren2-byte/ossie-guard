@@ -2,6 +2,8 @@
 
 🇹🇷 **Türkçesi:** [README.tr.md](README.tr.md)
 
+[![PyPI](https://img.shields.io/pypi/v/ossie-guard)](https://pypi.org/project/ossie-guard/) [![CI](https://github.com/gulmezeren2-byte/ossie-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/gulmezeren2-byte/ossie-guard/actions/workflows/ci.yml) [![Python](https://img.shields.io/pypi/pyversions/ossie-guard)](https://pypi.org/project/ossie-guard/) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
 **An honesty & safety linter for [Apache Ossie](https://github.com/apache/ossie) semantic models.**
 
 Apache Ossie (the reference implementation of the Open Semantic Interchange) lets one
@@ -47,14 +49,9 @@ ossie-guard 0.3.1 - model.yaml
 
 ## Install
 
-Works today, straight from the repo:
-
 ```console
-pip install git+https://github.com/gulmezeren2-byte/ossie-guard
+pip install ossie-guard
 ```
-
-A PyPI release (`pip install ossie-guard`) is on the way — the publish workflow
-is wired for Trusted Publishing and fires on the first tagged release.
 
 Dependencies are exactly Ossie's own: `pyyaml` and `sqlglot`, nothing else.
 
@@ -114,7 +111,7 @@ Run it after Ossie's own validator, which answers a different question:
 Prefer plain steps? The CLI is just as CI-friendly:
 
 ```yaml
-      - run: pip install git+https://github.com/gulmezeren2-byte/ossie-guard
+      - run: pip install ossie-guard
       - run: ossie-guard models/*.yaml
 ```
 
