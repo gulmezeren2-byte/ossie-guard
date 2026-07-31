@@ -1,0 +1,23 @@
+# Keeps the pins current without anyone remembering to look. The action SHAs in
+# ci.yml, publish.yml and action.yml are pinned deliberately (a tag is mutable;
+# a SHA is not), which is exactly why they need a bot to move them - a pin
+# nobody updates is a pin that ages into a known-vulnerable version.
+#
+# `action.yml` sits at the repository root, so the github-actions ecosystem is
+# declared for `/` and picks up both it and everything under .github/workflows.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      python-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
