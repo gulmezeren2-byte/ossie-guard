@@ -103,7 +103,7 @@ runs:
       # runner.temp is outside GITHUB_WORKSPACE, so hashFiles() cannot see the
       # report - gate on the step's own output instead.
       if: ${{ always() && inputs.upload-sarif == 'true' && steps.lint.outputs.sarif_written == 'true' }}
-      uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+      uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
       with:
         sarif_file: ${{ steps.lint.outputs.sarif_file }}
         category: ossie-guard
