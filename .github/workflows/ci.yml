@@ -11,7 +11,9 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned on purpose: ubuntu-latest moved to 26.04, which ships no
+    # Python 3.9 build, and requires-python is still >=3.9.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
